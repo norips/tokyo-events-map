@@ -278,13 +278,25 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
 .search svg { color: var(--text-3); width: 17px; height: 17px; }
 .search input { flex: 1; min-width: 0; border: 0; background: none; outline: none; font-size: 14px; }
 .search input::placeholder { color: var(--text-3); }
-.search input::-webkit-search-cancel-button { filter: grayscale(1); opacity: 0.5; }
+/* Our own clear button replaces the native one, which shifted under the
+   pointer when focusing hid the "/" hint. */
+.search input::-webkit-search-cancel-button { -webkit-appearance: none; appearance: none; display: none; }
+.search-clear {
+  display: grid; place-items: center;
+  width: 22px; height: 22px; margin-right: -4px;
+  border-radius: 50%;
+  background: var(--surface-3);
+  color: var(--text-2);
+  transition: background 0.15s, color 0.15s;
+}
+.search-clear:hover { background: var(--text-3); color: var(--bg); }
+.search-clear svg { width: 12px; height: 12px; stroke-width: 2.4; }
 .search kbd {
   font-family: var(--font-mono); font-size: 11px;
   padding: 1px 6px; border-radius: 5px;
   border: 1px solid var(--border-strong); color: var(--text-3);
 }
-.search:focus-within kbd { display: none; }
+.search:focus-within kbd, .search.has-value kbd { display: none; }
 
 /* Chips */
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }

@@ -256,9 +256,16 @@ function renderControls() {
   $("#to-input").value = r[1];
   $("#today-btn").classList.toggle("is-today", r[0] <= state.today && state.today <= r[1]);
   if ($("#search").value !== state.q) $("#search").value = state.q;
+  syncSearchClear();
 }
 
 const CHIPS_COLLAPSED = 8;
+function syncSearchClear() {
+  const has = $("#search").value.length > 0;
+  $("#search-clear").hidden = !has;
+  $(".search").classList.toggle("has-value", has);
+}
+
 function renderChips() {
   const facets = state.data?.facets || {};
   // Busiest types first; selected types always stay visible.
@@ -810,7 +817,15 @@ function bind() {
   });
 
   let searchTimer;
+  $("#search-clear").addEventListener("click", () => {
+    clearTimeout(searchTimer);
+    $("#search").value = "";
+    syncSearchClear();
+    $("#search").focus();
+    if (state.q) { state.q = ""; update(); }
+  });
   $("#search").addEventListener("input", (e) => {
+    syncSearchClear();
     clearTimeout(searchTimer);
     searchTimer = setTimeout(() => { state.q = e.target.value.trim(); update(); }, 220);
   });
