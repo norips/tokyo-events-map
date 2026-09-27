@@ -1,0 +1,20 @@
+[workspace]
+name = "tokyo-events"
+version = "0.1.0"
+description = "Every event happening in Tokyo, on a map."
+channels = ["conda-forge"]
+platforms = ["linux-64", "osx-arm64", "osx-64", "win-64"]
+
+[dependencies]
+# The back end only uses the standard library (sqlite3, http.server, urllib).
+python = ">=3.11"
+
+[tasks]
+# Extra arguments are forwarded, e.g. `pixi run scrape --days 90` or `pixi run serve --port 9000`.
+scrape = { cmd = "python -m tokyo_events scrape", description = "Fetch events from all enabled sources into data/events.db" }
+serve = { cmd = "python -m tokyo_events serve", description = "Run the API + website on http://127.0.0.1:8000" }
+start = { cmd = "python -m tokyo_events serve", depends-on = ["scrape"], description = "Scrape, then serve the website" }
+stats = { cmd = "python -m tokyo_events stats", description = "Show a summary of the database" }
+sources = { cmd = "python -m tokyo_events sources", description = "List registered event sources" }
+test = { cmd = "python -m unittest discover -s tests -v", description = "Run the test suite" }
+clean-cache = { cmd = "rm -rf .cache", description = "Delete the HTTP page cache" }
