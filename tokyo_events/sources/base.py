@@ -36,6 +36,8 @@ class EventSource(ABC):
     color: str  # badge colour in the UI
     homepage: str
     enabled: bool = True
+    # Whether the UI shows this source until the visitor changes the selection.
+    default_on: bool = True
     # Lower wins when duplicates across sources are merged: its record is the
     # base and others only fill in missing fields.
     priority: int = 50

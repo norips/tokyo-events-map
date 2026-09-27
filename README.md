@@ -104,7 +104,7 @@ Things to know: the first run has no cached database, so it does a full Tokyo Ch
 
 - **Day / Week / Weekend / Custom**: pick the range (a whole month is a Custom range); ← / → (or the arrows) step through periods; click the label to jump to a date.
 - **Weekend** covers Saturday–Sunday (on a weekday, the coming one); ← / → step weekend by weekend.
-- **Sources**: toggle each source on or off; counts show how many events each lists in the range. Badges on each event show who lists it.
+- **Sources**: toggle each source on or off (Tokyo Art Beat starts off, since its hundreds of exhibitions would drown out everything else; a source sets this with `default_on = False`); counts show how many events each lists in the range. Badges on each event show who lists it.
 - The **bar rail** shows events per day in the range; click a bar to open that day.
 - **Type chips** filter by category (multi-select), with counts for the current range; the busiest types show first, the rest behind "+N more".
 - **In map view** limits the list to what's visible on the map.

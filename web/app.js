@@ -54,7 +54,8 @@ const state = {
   from: null,
   to: null,
   cats: new Set(),
-  sources: new Set(), // empty = all sources
+  sources: new Set(), // empty = all sources (no filter sent to the API)
+  sourcesFromUrl: false,
   q: "",
   inView: false,
   selected: null,
@@ -128,6 +129,7 @@ function readHash() {
   if (D.valid(p.get("to"))) state.to = p.get("to");
   state.cats = new Set((p.get("cats") || "").split(",").filter((c) => c in CATEGORY_COLORS));
   state.sources = new Set((p.get("src") || "").split(",").filter(Boolean));
+  state.sourcesFromUrl = p.has("src");
   state.q = p.get("q") || "";
   state.selected = p.get("event") || null;
 }
@@ -137,7 +139,9 @@ function writeHash() {
   if (state.mode === "custom") { const [f, t] = range(); p.set("from", f); p.set("to", t); }
   else p.set("date", state.anchor);
   if (state.cats.size) p.set("cats", [...state.cats].join(","));
-  if (state.sources.size) p.set("src", [...state.sources].join(","));
+  // The URL only records the source choice when it differs from the default.
+  if (state.meta && !sourcesAreDefault()) p.set("src", [...effectiveSources()].join(","));
+  else if (!state.meta && state.sourcesFromUrl) p.set("src", [...state.sources].join(","));
   if (state.q) p.set("q", state.q);
   if (state.selected) p.set("event", state.selected);
   history.replaceState(null, "", "#" + p.toString());
@@ -283,6 +287,18 @@ function renderChips() {
   $("#chips").innerHTML = html + more + (state.cats.size ? `<button class="chip clear" data-clear>Clear</button>` : "");
 }
 
+const allSourceNames = () => (state.meta?.sources || []).map((s) => s.name);
+const defaultSources = () => new Set((state.meta?.sources || []).filter((s) => s.defaultOn !== false).map((s) => s.name));
+const effectiveSources = () => (state.sources.size ? state.sources : new Set(allSourceNames()));
+function sourcesAreDefault() {
+  const a = effectiveSources(), b = defaultSources();
+  return a.size === b.size && [...a].every((n) => b.has(n));
+}
+// Selection as sent to the API: empty means every source.
+function normalizeSources(selected) {
+  return selected.size === allSourceNames().length ? new Set() : selected;
+}
+
 function renderSources() {
   const srcs = state.meta?.sources || [];
   if (srcs.length < 2) { $("#sources").innerHTML = ""; return; }
@@ -296,11 +312,10 @@ function renderSources() {
 }
 
 function toggleSource(name) {
-  const names = (state.meta?.sources || []).map((s) => s.name);
-  const selected = state.sources.size ? new Set(state.sources) : new Set(names);
+  const selected = new Set(effectiveSources());
   selected.has(name) ? selected.delete(name) : selected.add(name);
   if (!selected.size) { toast("Keep at least one source selected"); return; }
-  state.sources = selected.size === names.length ? new Set() : selected;
+  state.sources = normalizeSources(selected);
   update();
 }
 
@@ -375,7 +390,7 @@ function renderList() {
     : `<strong>${total}</strong> event${total === 1 ? "" : "s"}`;
 
   if (!evs.length) {
-    const filtered = state.cats.size || state.sources.size || state.q;
+    const filtered = state.cats.size || !sourcesAreDefault() || state.q;
     list.innerHTML = `<div class="empty-state"><div class="big">Nothing on${state.inView ? " here" : ""}</div>
       ${filtered ? "No events match these filters." : state.inView ? "Try zooming out or moving the map." : "No events found for this period."}
       ${filtered ? `<br><button class="pill-btn" data-reset>Reset filters</button>` : ""}</div>`;
@@ -848,7 +863,7 @@ function bind() {
 
   const list = $("#list");
   list.addEventListener("click", (e) => {
-    if (e.target.closest("[data-reset]")) { state.cats.clear(); state.sources.clear(); state.q = ""; update(); return; }
+    if (e.target.closest("[data-reset]")) { state.cats.clear(); state.sources = normalizeSources(defaultSources()); state.q = ""; update(); return; }
     const card = e.target.closest(".card");
     if (card) openDetail(card.dataset.id);
   });
@@ -895,6 +910,7 @@ async function main() {
   initMap();
   renderControls();
   await loadMeta();
+  if (!state.sourcesFromUrl) state.sources = normalizeSources(defaultSources());
   if (!location.hash) state.anchor = state.today;
   await update();
   if (wantedDetail && findEvent(wantedDetail)) openDetail(wantedDetail);

@@ -50,6 +50,7 @@ def build_meta(store: EventStore) -> dict:
                 "short": cls.short,
                 "color": cls.color,
                 "homepage": cls.homepage,
+                "defaultOn": cls.default_on,
                 "count": s["counts"].get(cls.name, 0),
                 "lastSuccess": s["last_success"].get(cls.name),
             }

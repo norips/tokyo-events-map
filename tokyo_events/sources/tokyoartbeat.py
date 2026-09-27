@@ -97,6 +97,7 @@ class TokyoArtBeat(EventSource):
     color = "#0f172a"
     homepage = "https://www.tokyoartbeat.com/en/events"
     priority = 30  # exact venue coordinates, but no prices, hours or descriptions
+    default_on = False  # hundreds of exhibitions would drown out everything else
 
     def __init__(self, fetcher: Fetcher | None = None):
         self.fetcher = fetcher or Fetcher(min_interval=1.5)
