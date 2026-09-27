@@ -202,7 +202,10 @@ def build_event(card: dict, detail: dict) -> Event | None:
 class TokyoCheapo(EventSource):
     name = "tokyocheapo"
     label = "Tokyo Cheapo"
+    short = "TC"
+    color = "#16a34a"
     homepage = "https://tokyocheapo.com/events/"
+    priority = 10  # richest records: area, nearest station, hours, price
 
     def __init__(self, fetcher: Fetcher | None = None):
         # The site sits behind a bot firewall: stay sequential and slow.

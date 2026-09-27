@@ -12,6 +12,7 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
+from .dedupe import merge
 from .models import CATEGORIES
 from .scrape import tokyo_today
 from .sources import REGISTRY
@@ -31,6 +32,31 @@ class ApiError(Exception):
 
 def _csv(qs: dict, key: str) -> list[str]:
     return [v for raw in qs.get(key, []) for v in raw.split(",") if v]
+
+
+def build_meta(store: EventStore) -> dict:
+    s = store.summary()
+    return {
+        "today": tokyo_today().date().isoformat(),
+        "timezone": "Asia/Tokyo",
+        "total": s["total"],
+        "minDate": s["min_date"],
+        "maxDate": s["max_date"],
+        "categories": [{"slug": k, "label": v} for k, v in CATEGORIES.items()],
+        "sources": [
+            {
+                "name": cls.name,
+                "label": cls.label,
+                "short": cls.short,
+                "color": cls.color,
+                "homepage": cls.homepage,
+                "count": s["counts"].get(cls.name, 0),
+                "lastSuccess": s["last_success"].get(cls.name),
+            }
+            for cls in sorted(REGISTRY.values(), key=lambda c: c.priority)
+            if cls.enabled or s["counts"].get(cls.name)
+        ],
+    }
 
 
 class Handler(SimpleHTTPRequestHandler):
@@ -78,25 +104,7 @@ class Handler(SimpleHTTPRequestHandler):
         self.wfile.write(data)
 
     def meta(self) -> dict:
-        s = self.store.summary()
-        return {
-            "today": tokyo_today().date().isoformat(),
-            "timezone": "Asia/Tokyo",
-            "total": s["total"],
-            "minDate": s["min_date"],
-            "maxDate": s["max_date"],
-            "categories": [{"slug": k, "label": v} for k, v in CATEGORIES.items()],
-            "sources": [
-                {
-                    "name": cls.name,
-                    "label": cls.label,
-                    "homepage": cls.homepage,
-                    "count": s["counts"].get(cls.name, 0),
-                    "lastSuccess": s["last_success"].get(cls.name),
-                }
-                for cls in REGISTRY.values()
-            ],
-        }
+        return build_meta(self.store)
 
     def events(self, qs: dict) -> dict:
         today = tokyo_today().date().isoformat()
@@ -113,18 +121,51 @@ class Handler(SimpleHTTPRequestHandler):
         if span > MAX_RANGE_DAYS:
             raise ApiError(400, f"range is limited to {MAX_RANGE_DAYS} days")
 
-        categories = _csv(qs, "categories")
+        categories = set(_csv(qs, "categories"))
+        sources = set(_csv(qs, "sources"))
         text = (qs.get("q", [""])[0] or "").strip()[:100] or None
-        # Facet counts ignore the category filter so the chips can show what
-        # each type would add.
-        base = self.store.query(date_from, date_to, sources=_csv(qs, "sources") or None, text=text)
+
+        groups: dict[str, list[dict]] = {}
+        for r in self.store.query(date_from, date_to):
+            groups.setdefault(r.pop("dup_group") or r["id"], []).append(r)
+        if text:
+            # A duplicate group matches if any source's wording matches; keep it whole.
+            needle = text.lower()
+            groups = {
+                k: members for k, members in groups.items()
+                if any(needle in (m.get(f) or "").lower()
+                       for m in members for f in ("title", "summary", "venue_name", "area"))
+            }
+
+        # Facets ignore their own filter so each chip can show what it would add.
+        source_facets: dict[str, int] = {}
+        for members in groups.values():
+            for name in {m["source"] for m in members}:
+                source_facets[name] = source_facets.get(name, 0) + 1
+
+        priority = {cls.name: cls.priority for cls in REGISTRY.values()}
+        labels = {cls.name: cls.label for cls in REGISTRY.values()}
+        merged = []
+        for members in groups.values():
+            if sources:
+                members = [m for m in members if m["source"] in sources]
+            if members:
+                merged.append(merge(members, priority, labels))
+
         facets: dict[str, int] = {}
-        for e in base:
+        for e in merged:
             for c in e["categories"]:
                 facets[c] = facets.get(c, 0) + 1
-        selected = set(categories)
-        events = [e for e in base if selected.intersection(e["categories"])] if selected else base
-        return {"from": date_from, "to": date_to, "count": len(events), "facets": facets, "events": events}
+        events = [e for e in merged if categories.intersection(e["categories"])] if categories else merged
+        events.sort(key=lambda e: (e["date_approx"], e["start_date"], e["end_date"], e["title"]))
+        return {
+            "from": date_from,
+            "to": date_to,
+            "count": len(events),
+            "facets": facets,
+            "sourceFacets": source_facets,
+            "events": events,
+        }
 
 
 def serve(host: str = "127.0.0.1", port: int = 8000, db_path: str | None = None) -> None:

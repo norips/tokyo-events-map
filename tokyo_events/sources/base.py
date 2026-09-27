@@ -32,8 +32,13 @@ class Unchanged:
 class EventSource(ABC):
     name: str  # registry key, also stored on every event
     label: str  # human name shown in the UI
+    short: str  # 2-letter monogram for compact UI badges
+    color: str  # badge colour in the UI
     homepage: str
     enabled: bool = True
+    # Lower wins when duplicates across sources are merged: its record is the
+    # base and others only fill in missing fields.
+    priority: int = 50
 
     @abstractmethod
     def scrape(self, ctx: ScrapeContext) -> Iterator[Event | Unchanged]:

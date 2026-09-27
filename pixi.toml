@@ -14,6 +14,8 @@ python = ">=3.11"
 scrape = { cmd = "python -m tokyo_events scrape", description = "Fetch events from all enabled sources into data/events.db" }
 serve = { cmd = "python -m tokyo_events serve", description = "Run the API + website on http://127.0.0.1:8000" }
 start = { cmd = "python -m tokyo_events serve", depends-on = ["scrape"], description = "Scrape, then serve the website" }
+build-site = { cmd = "python -m tokyo_events export --out _site", description = "Write a static copy of the site to _site/ (for GitHub Pages)" }
+dedupe = { cmd = "python -m tokyo_events dedupe", description = "Recompute cross-source duplicate groups" }
 stats = { cmd = "python -m tokyo_events stats", description = "Show a summary of the database" }
 sources = { cmd = "python -m tokyo_events sources", description = "List registered event sources" }
 test = { cmd = "python -m unittest discover -s tests -v", description = "Run the test suite" }

@@ -25,6 +25,9 @@ def main() -> None:
     v.add_argument("--host", default="127.0.0.1")
     v.add_argument("--port", type=int, default=8000)
 
+    sub.add_parser("dedupe", help="recompute cross-source duplicate groups")
+    x = sub.add_parser("export", help="write a static copy of the site (no server needed)")
+    x.add_argument("--out", default="_site", help="output directory (default: _site)")
     sub.add_parser("sources", help="list registered sources")
     sub.add_parser("stats", help="show database summary")
 
@@ -36,8 +39,15 @@ def main() -> None:
             print(json.dumps(stats))
     elif args.cmd == "serve":
         api.serve(args.host, args.port, args.db)
+    elif args.cmd == "dedupe":
+        store = EventStore(args.db)
+        print(json.dumps(scrape.dedupe_store(store)))
+        store.close()
+    elif args.cmd == "export":
+        from .export import export_site
+        print(json.dumps(export_site(args.out, args.db)))
     elif args.cmd == "sources":
-        for cls in REGISTRY.values():
+        for cls in sorted(REGISTRY.values(), key=lambda c: c.priority):
             print(f"{cls.name:15} {'enabled ' if cls.enabled else 'disabled'} {cls.label} — {cls.homepage}")
     elif args.cmd == "stats":
         store = EventStore(args.db)

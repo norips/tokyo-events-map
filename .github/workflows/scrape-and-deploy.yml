@@ -1,0 +1,71 @@
+name: Scrape and deploy
+
+on:
+  schedule:
+    - cron: "17 */6 * * *" # every 6 hours (UTC)
+  workflow_dispatch:
+  push:
+    branches: [master]
+    paths: ["tokyo_events/**", "web/**", "pixi.toml", ".github/workflows/**"]
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: prefix-dev/setup-pixi@v0.10.2
+        with:
+          cache: true
+
+      # The SQLite database persists between runs through the Actions cache, so
+      # scraping stays incremental (and geocoding results are reused).
+      - name: Restore database
+        uses: actions/cache/restore@v6
+        with:
+          path: data
+          key: events-db-${{ github.run_id }}
+          restore-keys: events-db-
+
+      - name: Scrape
+        run: pixi run scrape | tee scrape.jsonl
+
+      - name: Save database
+        if: always()
+        uses: actions/cache/save@v6
+        with:
+          path: data
+          key: events-db-${{ github.run_id }}-${{ github.run_attempt }}
+
+      - name: Report
+        if: always()
+        run: python3 .github/scripts/scrape_report.py scrape.jsonl
+
+      - name: Build static site
+        run: pixi run build-site
+
+      - uses: actions/configure-pages@v6
+
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5

@@ -27,4 +27,4 @@ def enabled_sources() -> list[type[EventSource]]:
     return [cls for cls in REGISTRY.values() if cls.enabled]
 
 
-from . import tokyocheapo  # noqa: E402,F401  (registers itself)
+from . import tokyoartbeat, tokyocheapo, tokyoweekender  # noqa: E402,F401  (register themselves)

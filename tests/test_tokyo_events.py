@@ -165,7 +165,10 @@ class ApiTests(unittest.TestCase):
         store.upsert_many([
             ev("a", "2026-09-27", "2026-09-27", ("music",)),
             ev("b", "2026-09-20", "2026-10-05", ("art",)),
+            Event(source="other", source_id="b2", url="https://y/b2", title="B",
+                  start_date="2026-09-20", end_date="2026-10-05", categories=["festival"]),
         ])
+        store.set_groups({"test:a": "test:a", "test:b": "test:b", "other:b2": "test:b"})
         store.close()
         api.Handler.db_path = str(db)
         cls.server = ThreadingHTTPServer(("127.0.0.1", 0), partial(api.Handler, directory=str(api.WEB_DIR)))
@@ -189,7 +192,16 @@ class ApiTests(unittest.TestCase):
         status, body = self.get("/api/events?from=2026-09-27&to=2026-09-27&categories=music")
         self.assertEqual(status, 200)
         self.assertEqual([e["source_id"] for e in body["events"]], ["a"])
-        self.assertEqual(body["facets"], {"music": 1, "art": 1})  # facets ignore the category filter
+        self.assertEqual(body["facets"], {"music": 1, "art": 1, "festival": 1})  # facets ignore the category filter
+
+    def test_duplicates_are_merged_and_sources_filter(self):
+        status, body = self.get("/api/events?from=2026-09-27&to=2026-09-27")
+        self.assertEqual(body["count"], 2)
+        merged = next(e for e in body["events"] if set(e["ids"]) == {"test:b", "other:b2"})
+        self.assertEqual(merged["categories"], ["art", "festival"])
+        self.assertEqual(body["sourceFacets"], {"test": 2, "other": 1})
+        status, body = self.get("/api/events?from=2026-09-27&to=2026-09-27&sources=other")
+        self.assertEqual([e["id"] for e in body["events"]], ["other:b2"])
 
     def test_validation(self):
         self.assertEqual(self.get("/api/events?from=2026-10-01&to=2026-09-01")[0], 400)
@@ -199,7 +211,7 @@ class ApiTests(unittest.TestCase):
     def test_meta(self):
         status, body = self.get("/api/meta")
         self.assertEqual(status, 200)
-        self.assertEqual(body["total"], 2)
+        self.assertEqual(body["total"], 3)
         self.assertIn("tokyocheapo", [s["name"] for s in body["sources"]])
 
     def test_static_index(self):
@@ -209,3 +221,120 @@ class ApiTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class NewSourceTests(unittest.TestCase):
+    def test_tokyoartbeat_keeps_tokyo_and_skips_permanent(self):
+        from tokyo_events.sources.tokyoartbeat import build_event, listing_events
+        raws = listing_events((FIXTURES / "tokyoartbeat.html").read_text())
+        events = [e for e in (build_event(r) for r in raws) if e]
+        self.assertEqual(len(raws), 3)
+        self.assertEqual(len(events), 1)  # Kyoto is out of the box, permanent collection skipped
+        e = events[0]
+        self.assertEqual(e.venue_name, "Signal")
+        self.assertEqual((e.start_date, e.end_date), ("2026-09-29", "2026-10-31"))
+        self.assertIn("art", e.categories)
+        self.assertTrue(e.image.startswith("https://") and e.image.endswith("?w=640&fm=jpg"))
+        self.assertEqual(e.geo_precision, "venue")
+
+    def test_tokyoweekender_fields(self):
+        from tokyo_events.sources.tokyoweekender import build_event
+        items = json.loads((FIXTURES / "tokyoweekender.json").read_text())
+        slugs = {303486: "museums-exhibitions", 303485: "pop-culture"}
+        e = build_event(items[0], slugs)
+        self.assertEqual((e.start_date, e.end_date), ("2026-09-15", "2026-11-08"))
+        self.assertEqual((e.start_time, e.end_time), ("09:30", "17:30"))
+        self.assertTrue(e.time_text.startswith("9:30am – 5:30pm · Saturdays until"))
+        self.assertEqual(e.price_min, 1900.0)
+        self.assertAlmostEqual(e.lat, 35.6965972)
+        self.assertEqual(e.categories, ["anime", "art"])
+        self.assertIsNone(build_event(items[2], slugs))  # online events are skipped
+
+
+def rec(id_, source, title, start, end, venue="", lat=35.66, lng=139.74, precision="venue"):
+    return {"id": id_, "source": source, "title": title, "venue_name": venue, "start_date": start,
+            "end_date": end, "lat": lat, "lng": lng, "geo_precision": precision}
+
+
+class DedupeTests(unittest.TestCase):
+    def groups(self, *rows):
+        from tokyo_events.dedupe import find_groups
+        g = find_groups(list(rows))
+        return g[rows[0]["id"]] == g[rows[1]["id"]]
+
+    def test_same_exhibition_reworded(self):
+        self.assertTrue(self.groups(
+            rec("a:1", "a", 'Mona Sugata "In Between"', "2026-10-03", "2026-10-30", "UltraSuperNew Kura"),
+            rec("b:1", "b", "Mona Sugata: In Between Exhibition", "2026-10-03", "2026-11-07", "UltraSuperNew KURA",
+                lng=139.741)))
+
+    def test_area_precision_needs_strong_title_match(self):
+        self.assertTrue(self.groups(
+            rec("a:1", "a", "Hiroshige: New Perspectives on Edo Japan", "2026-09-29", "2026-12-20", "Ueno",
+                precision="area"),
+            rec("b:1", "b", "Special Exhibition: Utagawa Hiroshige — New Perspectives on Edo Japan",
+                "2026-09-29", "2026-12-20", "Tokyo National Museum", lat=35.71, lng=139.77)))
+
+    def test_different_events_at_same_venue(self):
+        self.assertFalse(self.groups(
+            rec("a:1", "a", "Tokyo Tower Tanabata Festival", "2026-06-27", "2026-09-27", "Tokyo Tower"),
+            rec("b:1", "b", "Tokyo Tower Highball Garden 2026", "2026-03-20", "2026-10-18", "Tokyo Tower")))
+        self.assertFalse(self.groups(
+            rec("a:1", "a", "Sanrio Puroland Halloween", "2026-09-11", "2026-11-03", "Sanrio Puroland"),
+            rec("b:1", "b", "Sanrio Puroland 35th Anniversary Event", "2025-12-05", "2026-12-31", "Sanrio Puroland")))
+
+    def test_conflicting_numbers(self):
+        self.assertFalse(self.groups(
+            rec("a:1", "a", "Re:Zero 10th Anniversary Exhibition", "2026-09-12", "2026-10-04", precision="area"),
+            rec("b:1", "b", "Mappa Expo 15th Anniversary Exhibition", "2026-09-16", "2026-12-07")))
+
+    def test_no_date_overlap_or_same_source(self):
+        self.assertFalse(self.groups(
+            rec("a:1", "a", "Moon Art Night", "2026-09-18", "2026-10-04"),
+            rec("b:1", "b", "Moon Art Night", "2027-09-18", "2027-10-04")))
+        self.assertFalse(self.groups(
+            rec("a:1", "a", "Moon Art Night", "2026-09-18", "2026-10-04"),
+            rec("a:2", "a", "Moon Art Night", "2026-09-18", "2026-10-04")))
+
+    def test_merge_prefers_priority_and_fills_gaps(self):
+        from tokyo_events.dedupe import merge
+        base = {"summary": "", "image": None, "time_text": None, "price_text": None, "price_min": None,
+                "price_max": None, "venue_address": None, "area": None, "station": None, "date_approx": False,
+                "date_label": None, "url": "u"}
+        a = {**base, **rec("a:1", "a", "Show", "2026-10-01", "2026-10-05", "Hall", precision="area"),
+             "categories": ["other"], "area": "Shibuya", "url": "https://a"}
+        b = {**base, **rec("b:1", "b", "Show!", "2026-10-01", "2026-10-05", "Hall", lat=35.7),
+             "categories": ["music"], "price_text": "¥1,000", "url": "https://b"}
+        m = merge([b, a], {"a": 10, "b": 20}, {"a": "A", "b": "B"})
+        self.assertEqual(m["id"], "a:1")  # higher priority source is the base
+        self.assertEqual((m["lat"], m["geo_precision"]), (35.7, "venue"))  # exact location wins
+        self.assertEqual(m["price_text"], "¥1,000")
+        self.assertEqual(m["categories"], ["music"])
+        self.assertEqual([s["label"] for s in m["sources"]], ["A", "B"])
+        self.assertEqual(m["ids"], ["a:1", "b:1"])
+
+
+class ExportTests(unittest.TestCase):
+    def test_static_export_has_variants_per_source_combination(self):
+        from tokyo_events.export import export_site
+        with tempfile.TemporaryDirectory() as tmp:
+            db = Path(tmp) / "x.db"
+            store = EventStore(db)
+            store.upsert_many([
+                ev("a", "2026-09-27", "2026-09-27", ("music",)),
+                Event(source="other", source_id="a2", url="https://y/a2", title="A",
+                      start_date="2026-09-27", end_date="2026-09-27", categories=["festival"]),
+                ev("solo", "2026-10-01", "2026-10-02", ("art",)),
+            ])
+            store.set_groups({"test:a": "test:a", "other:a2": "test:a", "test:solo": "test:solo"})
+            store.close()
+            result = export_site(Path(tmp) / "site", str(db))
+            site = Path(result["out"])
+            self.assertIn("data-static", (site / "index.html").read_text())
+            data = json.loads((site / "data" / "events.json").read_text())
+            self.assertEqual(result["events"], 2)
+            group = next(g for g in data["events"] if len(g["sources"]) == 2)
+            self.assertEqual(sorted(group["variants"]), ["other", "other,test", "test"])
+            self.assertEqual(group["variants"]["other,test"]["categories"], ["festival", "music"])
+            self.assertEqual(group["variants"]["test"]["categories"], ["music"])
+            self.assertIn("sources", data["meta"])

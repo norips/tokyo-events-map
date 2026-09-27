@@ -44,6 +44,7 @@ CREATE TABLE IF NOT EXISTS events (
     geo_precision TEXT,
     fingerprint   TEXT,
     source_categories TEXT,
+    dup_group     TEXT,  -- events describing the same happening across sources share this
     first_seen_at TEXT NOT NULL,
     last_seen_at  TEXT NOT NULL,
     scraped_at    TEXT NOT NULL
@@ -106,6 +107,8 @@ class EventStore:
         cols = {r["name"] for r in self.conn.execute("PRAGMA table_info(events)")}
         if "source_categories" not in cols:
             self.conn.execute("ALTER TABLE events ADD COLUMN source_categories TEXT")
+        if "dup_group" not in cols:
+            self.conn.execute("ALTER TABLE events ADD COLUMN dup_group TEXT")
 
     def close(self) -> None:
         self.conn.close()
@@ -171,6 +174,18 @@ class EventStore:
                     [(ev.id, c) for c in (ev.categories or ["other"])],
                 )
         return inserted, updated
+
+    def dedupe_rows(self) -> list[dict]:
+        rows = self.conn.execute(
+            "SELECT id, source, title, venue_name, start_date, end_date, lat, lng, geo_precision FROM events"
+        )
+        return [dict(r) for r in rows]
+
+    def set_groups(self, groups: dict[str, str]) -> None:
+        with self.conn:
+            self.conn.executemany(
+                "UPDATE events SET dup_group = ? WHERE id = ?", [(g, i) for i, g in groups.items()]
+            )
 
     def prune_ended_before(self, date: str) -> int:
         with self.conn:
@@ -244,7 +259,7 @@ class EventStore:
             d = dict(r)
             d["categories"] = sorted((d.pop("category_list") or "other").split(","))
             d["date_approx"] = bool(d["date_approx"])
-            for k in ("fingerprint", "first_seen_at", "source_categories"):
+            for k in ("fingerprint", "first_seen_at", "source_categories", "last_seen_at", "scraped_at"):
                 d.pop(k, None)
             out.append(d)
         return out

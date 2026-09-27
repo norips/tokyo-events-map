@@ -9,6 +9,7 @@ import logging
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 
+from .dedupe import find_groups
 from .geocode import AreaGeocoder
 from .http import Blocked
 from .models import Event, is_known_category, normalize_categories
@@ -70,11 +71,17 @@ def run_source(source: EventSource, store: EventStore, days: int, max_pages: int
         # the centroid of known venues there, else a geocoded area centre.
         centroids = _area_centroids(store, pending)
         for e in pending:
-            if e.lat is None and e.area:
+            if e.lat is not None:
+                continue
+            if e.area:
                 point = centroids.get(e.area) or geocoder.lookup(e.area)
-                if point:
-                    e.lat, e.lng = point
-                    e.geo_precision = "area"
+            elif e.venue_name:  # e.g. a named museum; shown as approximate
+                point = geocoder.lookup(e.venue_name)
+            else:
+                point = None
+            if point:
+                e.lat, e.lng = point
+                e.geo_precision = "area"
         inserted, updated = store.upsert_many(pending)
         store.touch(unchanged)
         stats["inserted"] += inserted
@@ -114,6 +121,18 @@ def run_source(source: EventSource, store: EventStore, days: int, max_pages: int
     return stats
 
 
+def dedupe_store(store: EventStore) -> dict:
+    groups = find_groups(store.dedupe_rows())
+    store.set_groups(groups)
+    sizes: dict[str, int] = defaultdict(int)
+    for g in groups.values():
+        sizes[g] += 1
+    merged = sum(n for n in sizes.values() if n > 1)
+    stats = {"records": len(groups), "events": len(sizes), "records_in_duplicate_groups": merged}
+    log.info("Dedupe: %(records)d records -> %(events)d events (%(records_in_duplicate_groups)d records merged)", stats)
+    return stats
+
+
 def run(source_names: list[str] | None, days: int = 365, max_pages: int = 60, db_path=None) -> list[dict]:
     classes = [get_source(n) for n in source_names] if source_names else enabled_sources()
     store = EventStore(db_path)
@@ -121,10 +140,15 @@ def run(source_names: list[str] | None, days: int = 365, max_pages: int = 60, db
         results = []
         for cls in classes:
             log.info("Scraping %s (horizon %d days)", cls.name, days)
-            results.append(run_source(cls(), store, days, max_pages))
+            try:
+                results.append(run_source(cls(), store, days, max_pages))
+            except Exception:  # one broken source must not take the others down
+                log.exception("%s failed", cls.name)
+                results.append({"source": cls.name, "status": "error"})
         pruned = store.prune_ended_before((tokyo_today() - timedelta(days=30)).date().isoformat())
         if pruned:
             log.info("Pruned %d events that ended over 30 days ago", pruned)
+        dedupe_store(store)
         return results
     finally:
         store.close()

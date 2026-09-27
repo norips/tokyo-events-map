@@ -1,0 +1,145 @@
+[
+ {
+  "id": 299983,
+  "date": "2026-09-24T10:49:44",
+  "date_gmt": "2026-09-24T01:49:44",
+  "modified": "2026-09-24T10:49:44",
+  "modified_gmt": "2026-09-24T01:49:44",
+  "slug": "edo-tokyo-museum-nhk-taiga-drama-special-exhibition-the-toyotomi-brothers",
+  "link": "https://www.tokyoweekender.com/event/edo-tokyo-museum-nhk-taiga-drama-special-exhibition-the-toyotomi-brothers/",
+  "title": {
+   "rendered": "Edo-Tokyo Museum NHK Taiga Drama Special Exhibition: The Toyotomi Brothers"
+  },
+  "featured_media": 299982,
+  "event-categories": [
+   303486,
+   303485
+  ],
+  "acf": {
+   "venue_location": "",
+   "venue_name": "Edo-Tokyo Museum",
+   "get_directions_link": "https://www.google.com/maps/dir/?api=1&destination=%E6%9D%B1%E4%BA%AC%E9%83%BD%E6%B1%9F%E6%88%B8%E6%9D%B1%E4%BA%AC%E5%8D%9A%E7%89%A9%E9%A4%A8%2CTokyo",
+   "google_map_embed_map": "<iframe src=\"https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3991.1887823151737!2d139.7957336!3d35.6965972!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x60188934e1ee6539%3A0xc641f2f12c4bbd3!2sEdo-Tokyo%20Museum!5e1!3m2!1sen!2sus!4v1789433374970!5m2!1sen!2sus\" width=\"600\" height=\"450\" style=\"border:0;\" allowfullscreen=\"\" loading=\"lazy\" referrerpolicy=\"strict-origin-when-cross-origin\"></iframe>",
+   "event_type": "recurring",
+   "start_date": "20260915",
+   "end_date": "20261108",
+   "start_time": "09:30:00",
+   "end_time": "17:30:00",
+   "time_extra_info": "(Saturdays until 7:30 p.m.); entry until 30 minutes before closing",
+   "free": false,
+   "price": "¥1,900",
+   "price_from": 1900,
+   "extra_info": "Advance: adults ¥1,900, university/high school ¥1,100, ages 65+ ¥1,400 | Same-day: adults ¥2,100, university/high school ¥1,300, ages 65+ ¥1,600, free for high school age and under; free for disability certificate holders and one accompanying carer; ID required for student and age-based pricing",
+   "online": false,
+   "ticket_link": "",
+   "website_link": "https://toyotomi2026.jp/"
+  },
+  "yoast_head_json": {
+   "og_image": [
+    {
+     "width": 1200,
+     "height": 630,
+     "url": "https://www.tokyoweekender.com/wp-content/uploads/2026/09/Edo-Tokyo-Museum-NHK-Taiga-Drama-Special-Exhibition-The-Toy.jpg",
+     "type": "image/jpeg"
+    }
+   ],
+   "og_description": "This exhibition centers on Toyotomi Hidenaga, the younger brother of Toyotomi Hideyoshi and protagonist of the 2026 NHK \"taiga\" drama, NHK's annual year-long historical drama television series."
+  }
+ },
+ {
+  "id": 299981,
+  "date": "2026-09-24T10:47:42",
+  "date_gmt": "2026-09-24T01:47:42",
+  "modified": "2026-09-24T10:47:54",
+  "modified_gmt": "2026-09-24T01:47:54",
+  "slug": "meet-the-legendary-pokemon-legend-research-in-nihonbashi-yaesu",
+  "link": "https://www.tokyoweekender.com/event/meet-the-legendary-pokemon-legend-research-in-nihonbashi-yaesu/",
+  "title": {
+   "rendered": "Meet the Legendary Pokémon: Legend Research in Nihonbashi &#038; Yaesu"
+  },
+  "featured_media": 299980,
+  "event-categories": [
+   303501,
+   303513,
+   303627
+  ],
+  "acf": {
+   "venue_location": "",
+   "venue_name": "Nihonbashi Mitsui Tower 1F (puzzle-solving reception)",
+   "get_directions_link": "https://www.google.com/maps/dir/?api=1&destination=%E6%97%A5%E6%9C%AC%E6%A9%8B%E4%B8%89%E4%BA%95%E3%82%BF%E3%83%AF%E3%83%BC1F%EF%BC%88%E8%AC%8E%E8%A7%A3%E3%81%8D%E5%8F%97%E4%BB%98%E5%A0%B4%E6%89%80%EF%BC%89%2CTokyo",
+   "google_map_embed_map": "<iframe src=\"https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3991.674981708042!2d139.7731096!3d35.6868816!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x601889557c5f3b17%3A0x6eb6ee962029ca11!2sNihonbashi%20Mitsui%20Tower!5e1!3m2!1sen!2sus!4v1789497593367!5m2!1sen!2sus\" width=\"600\" height=\"450\" style=\"border:0;\" allowfullscreen=\"\" loading=\"lazy\" referrerpolicy=\"strict-origin-when-cross-origin\"></iframe>",
+   "event_type": "recurring",
+   "start_date": "20260909",
+   "end_date": "20261129",
+   "start_time": "11:00:00",
+   "end_time": "19:00:00",
+   "time_extra_info": "",
+   "free": false,
+   "price": "¥3,300",
+   "price_from": 3300,
+   "extra_info": "¥3,300 for the puzzle-solving activity; viewing the Pokemon statues around the neighborhood is free",
+   "online": false,
+   "ticket_link": "",
+   "website_link": "https://mitsui-shopping-park.com/urban/legend-research"
+  },
+  "yoast_head_json": {
+   "og_image": [
+    {
+     "width": 1200,
+     "height": 630,
+     "url": "https://www.tokyoweekender.com/wp-content/uploads/2026/09/Meet-the-Legendary-Pokemon-Legend-Research-in-Nihonbashi.jpg",
+     "type": "image/jpeg"
+    }
+   ],
+   "og_description": "Life-size statues of 19 Pokémon, including several Legendary Pokémon, appear across properties managed by Mitsui Fudosan Group, including Nihonbashi Mitsui Tower, COREDO Muromachi Terrace and Tokyo Midtown Yaesu. More than 100 Pokémon in total will appear both inside and outside the buildings. A companion puzzle-solving activity, \"Pokémon Legend Research: Awaken the Legendary Research Report,\" invites participants to search for the Pokémon and solve riddles using clues hidden at each location."
+  }
+ },
+ {
+  "id": 299979,
+  "date": "2026-09-24T10:44:40",
+  "date_gmt": "2026-09-24T01:44:40",
+  "modified": "2026-09-24T10:44:40",
+  "modified_gmt": "2026-09-24T01:44:40",
+  "slug": "hands-on-real-puzzle-solving-game-crazy-halloween",
+  "link": "https://www.tokyoweekender.com/event/hands-on-real-puzzle-solving-game-crazy-halloween/",
+  "title": {
+   "rendered": "Hands-On Real Puzzle-Solving Game: Crazy Halloween"
+  },
+  "featured_media": 299978,
+  "event-categories": [
+   303513,
+   303627,
+   303488
+  ],
+  "acf": {
+   "venue_location": "",
+   "venue_name": "XEOXY",
+   "get_directions_link": "https://www.google.com/maps/dir/?api=1&destination=XEOXY%EF%BC%88%E3%82%BC%E3%82%AA%E3%82%AF%E3%82%B7%E3%83%BC%EF%BC%89%2CTokyo",
+   "google_map_embed_map": "<iframe src=\"https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3991.2424942804246!2d139.6884601!3d35.695524!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x6018f30a8fffa79b%3A0x79707d5ba3de7b76!2zWEVPWFkg44K844Kq44Kv44K344O8!5e1!3m2!1sen!2sus!4v1789495646173!5m2!1sen!2sus\" width=\"600\" height=\"450\" style=\"border:0;\" allowfullscreen=\"\" loading=\"lazy\" referrerpolicy=\"strict-origin-when-cross-origin\"></iframe>",
+   "event_type": "recurring",
+   "start_date": "20261023",
+   "end_date": "20261101",
+   "start_time": "10:00:00",
+   "end_time": "21:00:00",
+   "time_extra_info": "10 a.m.-9 p.m.",
+   "free": false,
+   "price": "¥4,000",
+   "price_from": 4000,
+   "extra_info": "General ticket ¥4,000, group ticket (1-6 people) ¥23,400; same-day tickets add ¥500 per person",
+   "online": true,
+   "ticket_link": "",
+   "website_link": "https://www.xeoxy.com/event/crazy-h"
+  },
+  "yoast_head_json": {
+   "og_image": [
+    {
+     "width": 707,
+     "height": 1000,
+     "url": "https://www.tokyoweekender.com/wp-content/uploads/2026/09/Hands-On-Real-Puzzle-Solving-Game-Crazy-Halloween.jpg",
+     "type": "image/jpeg"
+    }
+   ],
+   "og_description": "Xeoxy escape room center is hosting a special version of their popular immersive puzzle games to celebrate the Halloween season."
+  }
+ }
+]

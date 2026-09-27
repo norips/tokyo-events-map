@@ -85,11 +85,57 @@ CATEGORY_ALIASES: dict[str, str] = {
     "books": "art",
     "fashion": "market",
     "tech": "trade-show",
+    # Tokyo Weekender
+    "anime-manga": "anime",
+    "pop-culture": "anime",
+    "museums-exhibitions": "art",
+    "food-drinks": "food",
+    "markets-festivals": "festival",
+    "nature-parks-outdoors": "nature",
+    "seasons-holidays": "festival",
+    "theater-dance-performance": "stage",
+    "family-kids": "community",
+    "therapy": "community",
+    "travel": "community",
+    "tw-collabs": "other",
+    # Tokyo Art Beat
+    "painting": "art",
+    "sculpture": "art",
+    "photography": "art",
+    "installation": "art",
+    "drawing": "art",
+    "illustration": "art",
+    "nihonga-ukiyoe": "art",
+    "ceramics-lacquer": "art",
+    "craft-folkcraft": "art",
+    "prints": "art",
+    "fashion-textile-design": "art",
+    "archeology-history-folklore": "art",
+    "graphics": "art",
+    "product": "art",
+    "media-arts": "art",
+    "architecture": "art",
+    "artist-in-residence": "art",
+    "handicraft": "art",
+    "picture-book": "art",
+    "calligraphy": "art",
+    "design": "art",
+    "video-and-film": "stage",
+    "performance-art": "stage",
+    "talks": "community",
+    "workshops": "community",
+    "sound": "music",
+    "manga-comics": "anime",
+    "animation": "anime",
+    "art-festival": "festival",
+    "art-fair": "art",
+    "art-competition": "art",
+    "nature-science": "nature",
 }
 
 
 def _slug(raw: str) -> str:
-    return raw.strip().lower().replace(" ", "-")
+    return re.sub(r"[^a-z0-9]+", "-", raw.strip().lower()).strip("-")
 
 
 def normalize_category(raw: str) -> str:

@@ -27,7 +27,8 @@ const MAP_STYLES = {
   dark: "https://tiles.openfreemap.org/styles/dark",
 };
 const TOKYO = { center: [139.735, 35.68], zoom: 11.2 };
-const MODES = ["day", "week", "month", "custom"];
+const TAB_MODES = ["day", "week", "weekend", "custom"];
+const MODES = [...TAB_MODES, "month"]; // "month" has no tab any more but old shared links still work
 
 const $ = (s, el = document) => el.querySelector(s);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
@@ -53,6 +54,7 @@ const state = {
   from: null,
   to: null,
   cats: new Set(),
+  sources: new Set(), // empty = all sources
   q: "",
   inView: false,
   selected: null,
@@ -65,6 +67,7 @@ function range() {
   const a = state.anchor;
   switch (state.mode) {
     case "day": return [a, a];
+    case "weekend": { const sat = weekendStart(a); return [sat, D.add(sat, 1)]; }
     case "week": { const start = D.add(a, -((D.dow(a) + 6) % 7)); return [start, D.add(start, 6)]; }
     case "month": { const start = a.slice(0, 8) + "01"; return [start, D.add(D.addMonths(start, 1), -1)]; }
     default: {
@@ -75,6 +78,12 @@ function range() {
   }
 }
 
+// Saturday of the weekend containing `day`, or of the coming weekend on weekdays.
+function weekendStart(day) {
+  const dow = D.dow(day);
+  return dow === 0 ? D.add(day, -1) : D.add(day, 6 - dow);
+}
+
 function rangeLabel([f, t]) {
   const thisYear = state.today.slice(0, 4);
   const yr = (s) => (s.slice(0, 4) !== thisYear ? " " + s.slice(0, 4) : "");
@@ -83,6 +92,14 @@ function rangeLabel([f, t]) {
     return rel + D.f(f, { weekday: "short", day: "numeric", month: "short" }) + yr(f);
   }
   if (state.mode === "month") return D.f(f, { month: "long", year: "numeric" });
+  if (state.mode === "weekend") {
+    const thisSat = weekendStart(state.today);
+    const rel = f === thisSat ? "This weekend · " : f === D.add(thisSat, 7) ? "Next weekend · " : "";
+    const span = f.slice(0, 7) === t.slice(0, 7)
+      ? `${D.f(f, { day: "numeric" })}–${D.f(t, { day: "numeric", month: "short" })}`
+      : `${D.f(f, { day: "numeric", month: "short" })} – ${D.f(t, { day: "numeric", month: "short" })}`;
+    return rel + (rel ? span : `Sat ${span}`) + yr(t);
+  }
   const sameMonth = f.slice(0, 7) === t.slice(0, 7);
   return sameMonth
     ? `${D.f(f, { day: "numeric" })} – ${D.f(t, { day: "numeric", month: "short" })}${yr(t)}`
@@ -91,7 +108,7 @@ function rangeLabel([f, t]) {
 
 function shift(dir) {
   if (state.mode === "day") state.anchor = D.add(state.anchor, dir);
-  else if (state.mode === "week") state.anchor = D.add(state.anchor, 7 * dir);
+  else if (state.mode === "week" || state.mode === "weekend") state.anchor = D.add(state.anchor, 7 * dir);
   else if (state.mode === "month") state.anchor = D.addMonths(state.anchor, dir);
   else {
     const [f, t] = range();
@@ -110,6 +127,7 @@ function readHash() {
   if (D.valid(p.get("from"))) state.from = p.get("from");
   if (D.valid(p.get("to"))) state.to = p.get("to");
   state.cats = new Set((p.get("cats") || "").split(",").filter((c) => c in CATEGORY_COLORS));
+  state.sources = new Set((p.get("src") || "").split(",").filter(Boolean));
   state.q = p.get("q") || "";
   state.selected = p.get("event") || null;
 }
@@ -119,12 +137,56 @@ function writeHash() {
   if (state.mode === "custom") { const [f, t] = range(); p.set("from", f); p.set("to", t); }
   else p.set("date", state.anchor);
   if (state.cats.size) p.set("cats", [...state.cats].join(","));
+  if (state.sources.size) p.set("src", [...state.sources].join(","));
   if (state.q) p.set("q", state.q);
   if (state.selected) p.set("event", state.selected);
   history.replaceState(null, "", "#" + p.toString());
 }
 
-/* ---------- API ---------- */
+/* ---------- Data: live API, or a static export (GitHub Pages) ---------- */
+// Paths are relative so the site also works under a sub-path like /tokyo-events/.
+const STATIC = document.documentElement.hasAttribute("data-static");
+let staticData;
+function loadStatic() {
+  staticData ??= fetch("data/events.json").then((r) => {
+    if (!r.ok) throw new Error(`data/events.json: ${r.status}`);
+    return r.json();
+  });
+  return staticData;
+}
+
+// Mirrors /api/events: every group carries a pre-merged variant per source
+// combination, so picking the right one reproduces the server-side merge.
+async function queryStatic(p) {
+  const data = await loadStatic();
+  const from = p.get("from"), to = p.get("to");
+  const cats = new Set((p.get("categories") || "").split(",").filter(Boolean));
+  const sources = new Set((p.get("sources") || "").split(",").filter(Boolean));
+  const needle = (p.get("q") || "").toLowerCase();
+  const inRange = (e) => e.start_date <= to && e.end_date >= from;
+  const hasText = (e) => [e.title, e.summary, e.venue_name, e.area].some((v) => v && v.toLowerCase().includes(needle));
+  const sourceFacets = {};
+  const merged = [];
+  for (const g of data.events) {
+    // Like the API, search every source's own wording, not just the merged record.
+    if (!inRange(g.variants[g.sources.join(",")]) || (needle && !Object.values(g.variants).some(hasText))) continue;
+    for (const s of g.sources) sourceFacets[s] = (sourceFacets[s] || 0) + 1;
+    const keep = sources.size ? g.sources.filter((s) => sources.has(s)) : g.sources;
+    const ev = keep.length && g.variants[keep.join(",")];
+    if (ev && inRange(ev)) merged.push(ev);
+  }
+  const facets = {};
+  for (const e of merged) for (const c of e.categories) facets[c] = (facets[c] || 0) + 1;
+  const events = cats.size ? merged.filter((e) => e.categories.some((c) => cats.has(c))) : merged;
+  events.sort((a, b) => (a.date_approx - b.date_approx) || a.start_date.localeCompare(b.start_date)
+    || a.end_date.localeCompare(b.end_date) || a.title.localeCompare(b.title));
+  return { from, to, count: events.length, facets, sourceFacets, events };
+}
+
+async function fetchMeta() {
+  if (STATIC) return { ...(await loadStatic()).meta, today: D.tokyoToday() };
+  return (await fetch("api/meta")).json();
+}
 const cache = new Map();
 let inflight;
 async function api(path) {
@@ -142,6 +204,8 @@ async function api(path) {
 /* ---------- Presentation helpers ---------- */
 const catLabel = (slug) => state.meta?.categories.find((c) => c.slug === slug)?.label ?? slug;
 const catOrder = (slug) => Object.keys(CATEGORY_COLORS).indexOf(slug);
+const sourceMeta = (name) => state.meta?.sources.find((s) => s.name === name) || { name, label: name, short: name.slice(0, 2).toUpperCase(), color: "#64748b" };
+const sourceBadge = (name) => { const s = sourceMeta(name); return `<span class="src-badge" style="--sc:${s.color}" title="${esc(s.label)}">${esc(s.short)}</span>`; };
 
 function primaryCat(ev) {
   const cats = [...ev.categories].sort((a, b) => catOrder(a) - catOrder(b));
@@ -179,9 +243,10 @@ function relTime(iso) {
 
 /* ---------- Rendering: controls ---------- */
 function renderControls() {
-  const idx = MODES.indexOf(state.mode);
+  const idx = TAB_MODES.indexOf(state.mode);
   document.querySelectorAll("#mode-tabs button").forEach((b, i) => b.setAttribute("aria-selected", i === idx));
-  $(".segmented-thumb").style.transform = `translateX(${idx * 100}%)`;
+  $(".segmented-thumb").style.transform = `translateX(${Math.max(idx, 0) * 100}%)`;
+  $(".segmented-thumb").style.opacity = idx < 0 ? 0 : 1;
 
   const r = range();
   $("#range-label").textContent = rangeLabel(r);
@@ -193,21 +258,50 @@ function renderControls() {
   if ($("#search").value !== state.q) $("#search").value = state.q;
 }
 
+const CHIPS_COLLAPSED = 8;
 function renderChips() {
   const facets = state.data?.facets || {};
-  const cats = (state.meta?.categories || []).filter((c) => facets[c.slug] || state.cats.has(c.slug));
+  // Busiest types first; selected types always stay visible.
+  const all = (state.meta?.categories || [])
+    .filter((c) => facets[c.slug] || state.cats.has(c.slug))
+    .sort((a, b) => (facets[b.slug] || 0) - (facets[a.slug] || 0) || catOrder(a.slug) - catOrder(b.slug));
+  const hidden = state.chipsOpen ? [] : all.slice(CHIPS_COLLAPSED).filter((c) => !state.cats.has(c.slug));
+  const cats = all.filter((c) => !hidden.includes(c));
+  const more = hidden.length ? `<button class="chip more" data-more>+${hidden.length} more</button>`
+    : all.length > CHIPS_COLLAPSED ? `<button class="chip more" data-more>Fewer</button>` : "";
   const html = cats.map((c) => `
     <button class="chip ${facets[c.slug] ? "" : "empty"}" style="--c:${CATEGORY_COLORS[c.slug]}" data-cat="${c.slug}" aria-pressed="${state.cats.has(c.slug)}">
       <span class="dot"></span>${esc(c.label)}<span class="n">${facets[c.slug] || 0}</span>
     </button>`).join("");
-  $("#chips").innerHTML = html + (state.cats.size ? `<button class="chip clear" data-clear>Clear</button>` : "");
+  $("#chips").innerHTML = html + more + (state.cats.size ? `<button class="chip clear" data-clear>Clear</button>` : "");
+}
+
+function renderSources() {
+  const srcs = state.meta?.sources || [];
+  if (srcs.length < 2) { $("#sources").innerHTML = ""; return; }
+  const facets = state.data?.sourceFacets || {};
+  const all = !state.sources.size;
+  $("#sources").innerHTML = `<span class="sources-label">Sources</span>` + srcs.map((s) => {
+    const on = all || state.sources.has(s.name);
+    return `<button class="source-pill" data-source="${esc(s.name)}" aria-pressed="${on}" style="--sc:${s.color}" title="${on ? "Hide" : "Show"} events from ${esc(s.label)}">
+      <span class="src-badge">${esc(s.short)}</span>${esc(s.label)}<span class="n">${facets[s.name] || 0}</span></button>`;
+  }).join("");
+}
+
+function toggleSource(name) {
+  const names = (state.meta?.sources || []).map((s) => s.name);
+  const selected = state.sources.size ? new Set(state.sources) : new Set(names);
+  selected.has(name) ? selected.delete(name) : selected.add(name);
+  if (!selected.size) { toast("Keep at least one source selected"); return; }
+  state.sources = selected.size === names.length ? new Set() : selected;
+  update();
 }
 
 function renderDensity(events) {
   const [f, t] = range();
   const days = D.diff(f, t) + 1;
   const el = $("#density");
-  if (state.mode === "day" || days > 62) { el.innerHTML = ""; return; }
+  if (days < 3 || days > 62) { el.innerHTML = ""; return; }
   const counts = new Array(days).fill(0);
   for (const ev of events) {
     if (ev.date_approx) continue;
@@ -274,7 +368,7 @@ function renderList() {
     : `<strong>${total}</strong> event${total === 1 ? "" : "s"}`;
 
   if (!evs.length) {
-    const filtered = state.cats.size || state.q;
+    const filtered = state.cats.size || state.sources.size || state.q;
     list.innerHTML = `<div class="empty-state"><div class="big">Nothing on${state.inView ? " here" : ""}</div>
       ${filtered ? "No events match these filters." : state.inView ? "Try zooming out or moving the map." : "No events found for this period."}
       ${filtered ? `<br><button class="pill-btn" data-reset>Reset filters</button>` : ""}</div>`;
@@ -300,7 +394,8 @@ function renderList() {
       else img.setAttribute("data-failed", "");
       const cats = ev.categories.sort((a, b) => catOrder(a) - catOrder(b)).slice(0, 2)
         .map((c) => `<span class="cat" style="--c:${CATEGORY_COLORS[c]}"><i></i>${esc(catLabel(c))}</span>`).join("");
-      node.querySelector(".card-kicker").innerHTML = cats + priceTag(ev) + (ev.date_approx ? `<span class="tag tbc">TBC</span>` : "");
+      node.querySelector(".card-kicker").innerHTML = cats + priceTag(ev) + (ev.date_approx ? `<span class="tag tbc">TBC</span>` : "")
+        + `<span class="src-stack" aria-label="Listed by ${esc(ev.sources.map((x) => x.label).join(", "))}">${ev.sources.map((x) => sourceBadge(x.name)).join("")}</span>`;
       node.querySelector(".card-title").textContent = ev.title;
       const where = ev.area || ev.venue_name || (ev.lat == null ? "Location TBA" : "");
       const time = ev.start_date === ev.end_date && ev.time_text ? ev.time_text : "";
@@ -335,16 +430,17 @@ function icsFor(ev) {
 }
 
 function findEvent(id) {
-  return state.data?.events.find((e) => e.id === id);
+  // Merged events answer to the id of any of their source records.
+  return state.data?.events.find((e) => e.id === id || e.ids?.includes(id));
 }
 
 function openDetail(id, { fly = true } = {}) {
   const ev = findEvent(id);
   if (!ev) return;
+  id = ev.id;
   state.selected = id;
   writeHash();
   const cat = primaryCat(ev);
-  const src = state.meta?.sources.find((s) => s.name === ev.source);
   const cats = ev.categories.map((c) =>
     `<span class="chip" style="--c:${CATEGORY_COLORS[c]}" aria-pressed="true"><span class="dot"></span>${esc(catLabel(c))}</span>`).join("");
   const longDate = ev.date_approx ? (ev.date_label || "Date to be confirmed")
@@ -385,7 +481,11 @@ function openDetail(id, { fly = true } = {}) {
         ${ev.date_approx ? "" : `<a class="btn" href="${icsFor(ev)}" download="${esc(ev.id.split(":")[1])}.ics">
           <svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M12 13v5M9.5 15.5h5"/></svg>Calendar</a>`}
       </div>
-      <p class="source-note">Listed by <a href="${esc(src?.homepage || ev.url)}" target="_blank" rel="noopener">${esc(src?.label || ev.source)}</a></p>
+      <div class="listed-by">
+        <span class="listed-label">Listed by ${ev.sources.length > 1 ? `${ev.sources.length} sources` : ""}</span>
+        ${ev.sources.map((x) => `<a class="listed-src" href="${esc(x.url)}" target="_blank" rel="noopener" style="--sc:${sourceMeta(x.name).color}">
+          ${sourceBadge(x.name)}<span>${esc(x.label)}</span><svg viewBox="0 0 24 24"><path d="M7 17L17 7M9 7h8v8"/></svg></a>`).join("")}
+      </div>
     </div>`;
   $("#view-list").hidden = true;
   $("#view-detail").hidden = false;
@@ -629,11 +729,12 @@ async function update() {
   const [f, t] = range();
   const p = new URLSearchParams({ from: f, to: t });
   if (state.cats.size) p.set("categories", [...state.cats].join(","));
+  if (state.sources.size) p.set("sources", [...state.sources].join(","));
   if (state.q) p.set("q", state.q);
   const seq = ++reqSeq;
   showSkeleton();
   try {
-    const data = await api(`/api/events?${p}`);
+    const data = STATIC ? await queryStatic(p) : await api(`api/events?${p}`);
     if (seq !== reqSeq) return;
     state.data = data;
   } catch (err) {
@@ -642,6 +743,7 @@ async function update() {
     return;
   }
   renderChips();
+  renderSources();
   renderDensity(state.data.events);
   renderList();
   refreshMapData();
@@ -661,12 +763,12 @@ function toast(msg) {
 
 async function loadMeta() {
   try {
-    state.meta = await (await fetch("/api/meta")).json();
+    state.meta = await fetchMeta();
     state.today = state.meta.today || state.today;
     const srcs = state.meta.sources.filter((s) => s.count);
     const last = srcs.map((s) => s.lastSuccess).filter(Boolean).sort().pop();
     $("#freshness").innerHTML = state.meta.total
-      ? `<span class="live-dot"></span>${state.meta.total.toLocaleString()} events · updated ${relTime(last)} · via ${srcs.map((s) => esc(s.label)).join(", ")}`
+      ? `<span class="live-dot"></span>${srcs.length} source${srcs.length > 1 ? "s" : ""} · updated ${relTime(last)}`
       : `No events yet: run <code>python3 -m tokyo_events scrape</code>`;
   } catch {
     $("#freshness").textContent = "API unavailable";
@@ -679,6 +781,7 @@ function bind() {
     const b = e.target.closest("[data-mode]");
     if (!b || b.dataset.mode === state.mode) return;
     if (b.dataset.mode === "custom") { const [f, t] = range(); state.from = f; state.to = state.mode === "day" ? D.add(f, 6) : t; }
+    else if (state.mode === "weekend") state.anchor = range()[0];
     else if (state.mode === "custom") state.anchor = range()[0];
     state.mode = b.dataset.mode;
     update();
@@ -715,16 +818,22 @@ function bind() {
   $("#chips").addEventListener("click", (e) => {
     const b = e.target.closest(".chip");
     if (!b) return;
+    if (b.hasAttribute("data-more")) { state.chipsOpen = !state.chipsOpen; renderChips(); return; }
     if (b.hasAttribute("data-clear")) state.cats.clear();
     else state.cats.has(b.dataset.cat) ? state.cats.delete(b.dataset.cat) : state.cats.add(b.dataset.cat);
     update();
+  });
+
+  $("#sources").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-source]");
+    if (b) toggleSource(b.dataset.source);
   });
 
   $("#in-view").addEventListener("change", (e) => { state.inView = e.target.checked; renderList(); });
 
   const list = $("#list");
   list.addEventListener("click", (e) => {
-    if (e.target.closest("[data-reset]")) { state.cats.clear(); state.q = ""; update(); return; }
+    if (e.target.closest("[data-reset]")) { state.cats.clear(); state.sources.clear(); state.q = ""; update(); return; }
     const card = e.target.closest(".card");
     if (card) openDetail(card.dataset.id);
   });
@@ -757,7 +866,7 @@ function bind() {
     } else if (!typing && !e.metaKey && !e.ctrlKey && !e.altKey) {
       if (e.key === "ArrowLeft") shift(-1);
       else if (e.key === "ArrowRight") shift(1);
-      else if ("dwmc".includes(e.key)) $(`[data-mode="${MODES["dwmc".indexOf(e.key)]}"]`).click();
+      else if ("dwsc".includes(e.key)) $(`[data-mode="${TAB_MODES["dwsc".indexOf(e.key)]}"]`).click();
     }
   });
 }

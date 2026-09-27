@@ -1,7 +1,7 @@
-"""Area-level geocoding via OpenStreetMap Nominatim, cached in the store.
+"""Approximate geocoding via OpenStreetMap Nominatim, cached in the store.
 
-Used only as a fallback for events whose source gives a neighbourhood but no
-coordinates. Nominatim's policy: max 1 request/second and an identifying UA.
+Used only as a fallback for events whose source gives a neighbourhood or a
+venue name but no coordinates. Nominatim's policy: max 1 request/second and an identifying UA.
 """
 
 from __future__ import annotations
@@ -24,8 +24,8 @@ class AreaGeocoder:
         self.store = store
         self.fetcher = Fetcher(min_interval=1.1)
 
-    def lookup(self, area: str) -> tuple[float, float] | None:
-        query = f"{area}, Japan"
+    def lookup(self, place: str) -> tuple[float, float] | None:
+        query = f"{place}, Japan"
         cached = self.store.geocode_lookup(query)
         if cached is not None:
             return cached if cached[0] is not None else None
@@ -35,7 +35,7 @@ class AreaGeocoder:
         try:
             results = json.loads(self.fetcher.get(f"{NOMINATIM}?{params}"))
         except Exception as exc:  # network trouble: don't cache, try again next run
-            log.warning("geocoding %r failed: %r", area, exc)
+            log.warning("geocoding %r failed: %r", place, exc)
             return None
         point = (float(results[0]["lat"]), float(results[0]["lon"])) if results else None
         self.store.geocode_save(query, *(point or (None, None)))
